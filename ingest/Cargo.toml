@@ -1,0 +1,23 @@
+[package]
+name = "gyrex-ingest"
+version = "0.1.0"
+edition = "2021"
+description = "Validated, retrying write path from the Gyrex collector into Neon Postgres"
+publish = false
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["float_roundtrip"] }
+ureq = "3"
+url = "2"
+
+[features]
+# Lets GYREX_TEST_SQL_ENDPOINT redirect requests to a local fake. Never enabled in release builds
+# used by the collector: without it, credentials can only go to api.<region>.neon.tech.
+test-endpoint = []
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+strip = true

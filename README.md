@@ -27,6 +27,8 @@ Nosana markets API ─┘    (hourly, GitHub Actions)        └> collector_runs
    ```bash
    python -m venv .venv && . .venv/bin/activate
    pip install -e '.[dev]'
+   cargo build --release --manifest-path ingest/Cargo.toml   # the database write path
+   cargo test --manifest-path ingest/Cargo.toml
    pytest -q
    gyrex-collect --dry-run --dump out     # no database; inspect out/*.json
    gyrex-collect                          # writes to Neon (needs DATABASE_URL)
@@ -45,10 +47,17 @@ Nosana markets API ─┘    (hourly, GitHub Actions)        └> collector_runs
 | `gpu_index` (view) | Per `gpu_model × vram_gb × offer_type`: offer count, providers, min/median/max $/GPU-hr over active offers. Same SQL as the live query in `web/lib/queries.ts`. |
 | `gpu_index_daily` | One `gpu_index` snapshot per UTC day, written by the `snapshot` function. |
 
-The collector writes through Neon's SQL-over-HTTP endpoint (`gyrex/neon_http.py`), so it needs
-only outbound HTTPS. Writes go through `ingest_offers()` and `close_run()`; after each run,
-offers that a provider stopped listing are marked inactive. A provider that errors or returns
-nothing keeps its last known offers.
+The collector writes through Neon's SQL-over-HTTP endpoint, so it needs only outbound HTTPS.
+Python fetches and normalizes; offers then go to `gyrex-ingest` (Rust, [`ingest/`](ingest/)), which
+owns the write path:
+
+- Each row is checked against the table's rules first, so a bad row is dropped on its own instead
+  of failing its 1,000-row batch. More than 5% rejected aborts the source before anything is written.
+- Batches go through `ingest_offers()`, retrying on 429, 5xx and lost connections.
+- `close_run()` then marks offers a provider stopped listing as inactive. A provider that errors,
+  returns nothing or had a row rejected keeps its last known offers, and a failed write delists nothing.
+
+Rejected rows appear in `collector_runs.errors` and mark the run `partial`.
 
 No row-level security: Neon Realtime rejects live queries on RLS tables, and the database is
 only reachable with a server-side connection string. The browser never sees one: it gets a

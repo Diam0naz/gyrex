@@ -18,7 +18,7 @@ from pathlib import Path
 
 from gyrex.adapters import gpuhunt_adapter, nosana
 from gyrex.models import dedupe
-from gyrex.sink import DryRunSink, NeonSink
+from gyrex.sink import DryRunSink, IngestError, NeonSink
 
 log = logging.getLogger("gyrex")
 SOURCES = ("gpuhunt", "nosana")
@@ -36,18 +36,24 @@ def run(sources: list[str], sink, dump_dir: str | None = None) -> int:
         raw: dict = {}
         deactivated = 0
         try:
-            started = sink.begin_run()  # database clock, so close_run compares like with like
             if source == "gpuhunt":
                 offers, errors = gpuhunt_adapter.fetch()
             else:
                 offers, errors = nosana.fetch(dump=raw if dump_dir else None)
             offers = dedupe(offers)
-            result = sink.write(source, offers) if offers else {"upserted": 0, "price_changes": 0}
+            # Offers are retired only for providers that delivered a complete list this run: one
+            # that errored, came back empty or had a row rejected keeps its last known offers.
+            result = sink.ingest(source, offers) if offers else {"upserted": 0, "price_changes": 0}
+            started = result.get("started_at") or started  # database clock, when there is one
+            deactivated = result.get("deactivated", 0)
+            if result.get("rejected"):
+                errors["rejected_rows"] = {
+                    "count": result["rejected"],
+                    "reasons": result.get("reject_reasons"),
+                    "samples": result.get("reject_samples"),
+                    "held_providers": result.get("held_providers"),
+                }
             status = "ok" if not errors else ("partial" if offers else "failed")
-            # Retire offers only for providers that answered with at least one offer this run:
-            # a provider that errored or came back empty keeps its last known offers.
-            ran = sorted({o.provider for o in offers})
-            deactivated = sink.close_run(source, ran, started)
         except Exception as e:
             log.exception("%s failed", source)
             offers, errors, result, status = [], {"fatal": f"{type(e).__name__}: {e}"[:500]}, {}, "failed"
@@ -105,7 +111,10 @@ def main(argv: list[str] | None = None) -> None:
         url = os.environ.get("DATABASE_URL")
         if not url:
             p.error("set DATABASE_URL (Neon, pooled), or use --dry-run")
-        sink = NeonSink(url)
+        try:
+            sink = NeonSink(url)
+        except IngestError as e:
+            p.error(str(e))
         if args.dump:
             Path(args.dump).mkdir(parents=True, exist_ok=True)
 
