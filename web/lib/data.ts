@@ -1,7 +1,8 @@
-import demo from "@/demo/gpu_index.json";
+/** Shared, client-safe types and helpers. Server-only loading lives in lib/load.ts. */
 
-/** One row of the public.gpu_index view (per-GPU USD/hour). */
+/** One row of the gpu_index query (per-GPU USD/hour). */
 export type IndexRow = {
+  key: string;
   gpu_model: string;
   vram_gb: number | null;
   offer_type: "on-demand" | "spot" | "decentralized";
@@ -10,14 +11,11 @@ export type IndexRow = {
   min_usd_hr: number;
   median_usd_hr: number;
   max_usd_hr: number;
-  last_seen: string;
+  /** timestamptz: a Date from the database drivers and Realtime, an ISO string in demo data */
+  last_seen: Date | string;
 };
 
-export type IndexData = {
-  rows: IndexRow[];
-  updatedAt: string | null;
-  source: "supabase" | "demo";
-};
+export type IndexSource = "neon" | "demo";
 
 /** A GPU (model + VRAM) with its on-demand / spot / decentralized stats side by side. */
 export type GpuLine = {
@@ -31,28 +29,7 @@ export type GpuLine = {
 
 export const REVALIDATE_SECONDS = 300;
 
-export async function getIndex(): Promise<IndexData> {
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_ANON_KEY;
-  if (!url || !key) {
-    return { rows: demo.rows as IndexRow[], updatedAt: demo.generated_at, source: "demo" };
-  }
-  const res = await fetch(`${url.replace(/\/$/, "")}/rest/v1/gpu_index?select=*`, {
-    headers: { apikey: key, Authorization: `Bearer ${key}` },
-    next: { revalidate: REVALIDATE_SECONDS },
-  });
-  if (!res.ok) {
-    throw new Error(`gpu_index fetch failed: ${res.status} ${await res.text()}`);
-  }
-  const rows = (await res.json()) as IndexRow[];
-  const updatedAt = rows.reduce<string | null>(
-    (latest, r) => (!latest || r.last_seen > latest ? r.last_seen : latest),
-    null,
-  );
-  return { rows, updatedAt, source: "supabase" };
-}
-
-export function toLines(rows: IndexRow[]): GpuLine[] {
+export function toLines(rows: readonly IndexRow[]): GpuLine[] {
   const lines = new Map<string, GpuLine>();
   for (const r of rows) {
     const key = `${r.gpu_model}|${r.vram_gb ?? ""}`;
@@ -63,4 +40,14 @@ export function toLines(rows: IndexRow[]): GpuLine[] {
     lines.set(key, line);
   }
   return [...lines.values()];
+}
+
+/** Newest last_seen across rows, as an ISO string. */
+export function latestSeen(rows: readonly IndexRow[]): string | null {
+  let latest: number | null = null;
+  for (const r of rows) {
+    const t = new Date(r.last_seen).getTime();
+    if (!Number.isNaN(t) && (latest === null || t > latest)) latest = t;
+  }
+  return latest === null ? null : new Date(latest).toISOString();
 }

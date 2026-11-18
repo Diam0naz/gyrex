@@ -1,6 +1,6 @@
-"""Collector entry point: run every adapter, write to Supabase (or JSON with --dry-run).
+"""Collector entry point: run every adapter, write to Neon Postgres (or JSON with --dry-run).
 
-    gyrex-collect                       # all sources -> Supabase
+    gyrex-collect                       # all sources -> Neon (DATABASE_URL)
     gyrex-collect --dry-run --dump out  # no DB; writes out/<source>_offers.json + raw Nosana payload
     gyrex-collect --sources nosana
 """
@@ -18,7 +18,7 @@ from pathlib import Path
 
 from gyrex.adapters import gpuhunt_adapter, nosana
 from gyrex.models import dedupe
-from gyrex.sink import DryRunSink, SupabaseSink
+from gyrex.sink import DryRunSink, NeonSink
 
 log = logging.getLogger("gyrex")
 SOURCES = ("gpuhunt", "nosana")
@@ -34,7 +34,9 @@ def run(sources: list[str], sink, dump_dir: str | None = None) -> int:
     for source in sources:
         started = _now()
         raw: dict = {}
+        deactivated = 0
         try:
+            started = sink.begin_run()  # database clock, so close_run compares like with like
             if source == "gpuhunt":
                 offers, errors = gpuhunt_adapter.fetch()
             else:
@@ -42,6 +44,10 @@ def run(sources: list[str], sink, dump_dir: str | None = None) -> int:
             offers = dedupe(offers)
             result = sink.write(source, offers) if offers else {"upserted": 0, "price_changes": 0}
             status = "ok" if not errors else ("partial" if offers else "failed")
+            # Retire offers only for providers that answered with at least one offer this run:
+            # a provider that errored or came back empty keeps its last known offers.
+            ran = sorted({o.provider for o in offers})
+            deactivated = sink.close_run(source, ran, started)
         except Exception as e:
             log.exception("%s failed", source)
             offers, errors, result, status = [], {"fatal": f"{type(e).__name__}: {e}"[:500]}, {}, "failed"
@@ -51,8 +57,8 @@ def run(sources: list[str], sink, dump_dir: str | None = None) -> int:
 
         unmapped = Counter(o.gpu_raw for o in offers if not o.gpu_model)
         log.info(
-            "%s: %s, %d offers, %s price changes%s",
-            source, status, len(offers), result.get("price_changes", "?"),
+            "%s: %s, %d offers, %s price changes, %d delisted%s",
+            source, status, len(offers), result.get("price_changes", "?"), deactivated,
             f", unmapped GPUs: {dict(unmapped)}" if unmapped else "",
         )
         try:
@@ -64,6 +70,7 @@ def run(sources: list[str], sink, dump_dir: str | None = None) -> int:
                     "finished_at": _now(),
                     "offers": len(offers),
                     "price_changes": result.get("price_changes", 0),
+                    "deactivated": deactivated,
                     "errors": errors or None,
                     "unmapped_gpus": dict(unmapped) or None,
                 }
@@ -95,10 +102,10 @@ def main(argv: list[str] | None = None) -> None:
     if args.dry_run:
         sink = DryRunSink(args.dump)
     else:
-        url, key = os.environ.get("SUPABASE_URL"), os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
-        if not url or not key:
-            p.error("set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY, or use --dry-run")
-        sink = SupabaseSink(url, key)
+        url = os.environ.get("DATABASE_URL")
+        if not url:
+            p.error("set DATABASE_URL (Neon, pooled), or use --dry-run")
+        sink = NeonSink(url)
         if args.dump:
             Path(args.dump).mkdir(parents=True, exist_ok=True)
 

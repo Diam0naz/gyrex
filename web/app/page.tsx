@@ -1,15 +1,17 @@
-import { getIndex, toLines, type IndexData } from "@/lib/data";
-import IndexTable from "./IndexTable";
+import { functionBaseUrl } from "@neon/env";
+import { getIndex, type IndexData } from "@/lib/load";
+import { realtimeEnabled, sealGpuIndex } from "@/lib/realtime";
+import LiveIndex from "./LiveIndex";
 
 export const revalidate = 300;
 
-function fmtTime(iso: string | null) {
-  if (!iso) return "unknown";
-  return new Date(iso).toLocaleString("en-US", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "UTC",
-  }) + " UTC";
+/** Public URL of the `snapshot` Neon Function (daily index history), when the branch env is present. */
+function historyUrl(): string | null {
+  try {
+    return functionBaseUrl("snapshot");
+  } catch {
+    return null; // NEON_BRANCH_ID / NEON_FUNCTION_HOST_SUFFIX not set (demo mode)
+  }
 }
 
 export default async function Page() {
@@ -30,9 +32,10 @@ export default async function Page() {
       </main>
     );
   }
-  const { rows, updatedAt, source } = data;
-  const lines = toLines(rows);
-  const offers = rows.reduce((n, r) => n + r.offers, 0);
+  const { rows, source } = data;
+  const live = source === "neon" && realtimeEnabled();
+  const sealedQuery = live ? await sealGpuIndex() : null;
+  const history = source === "neon" ? historyUrl() : null;
   const hasDecentralized = rows.some((r) => r.offer_type === "decentralized");
 
   return (
@@ -47,39 +50,27 @@ export default async function Page() {
         </p>
       </header>
 
-      {source === "demo" && (
-        <p className="notice" role="status">
-          Sample data: a one-off pull from centralized clouds, not live. Set{" "}
-          <code>SUPABASE_URL</code> and <code>SUPABASE_ANON_KEY</code> to serve the live index.
-        </p>
-      )}
-
-      <dl className="stats">
-        <div>
-          <dt>GPU models</dt>
-          <dd>{lines.length}</dd>
-        </div>
-        <div>
-          <dt>Offers</dt>
-          <dd>{offers.toLocaleString("en-US")}</dd>
-        </div>
-        <div>
-          <dt>Updated</dt>
-          <dd className="small">{fmtTime(updatedAt)}</dd>
-        </div>
-      </dl>
-
-      <IndexTable lines={lines} showDecentralized={hasDecentralized} />
+      <LiveIndex
+        initialRows={rows}
+        source={source}
+        sealedQuery={sealedQuery}
+        realtimeUrl={live ? (process.env.NEXT_PUBLIC_NEON_REALTIME_URL ?? null) : null}
+      />
 
       <footer className="foot">
         <p>
-          Median and lowest price per GPU-hour, from offers seen in the last 6 hours. Centralized
-          prices come from{" "}
-          <a href="https://github.com/dstackai/gpuhunt">gpuhunt</a>; decentralized prices from each
-          network&apos;s market API. Listed prices only: availability isn&apos;t guaranteed.
+          Median and lowest price per GPU-hour, from each provider&apos;s latest listing. Centralized
+          prices come from <a href="https://github.com/dstackai/gpuhunt">gpuhunt</a>; decentralized
+          prices from each network&apos;s market API. Listed prices only: availability isn&apos;t
+          guaranteed.
         </p>
         <p>
           JSON: <a href="/api/v1/gpu-index">/api/v1/gpu-index</a>
+          {history && (
+            <>
+              {" · "}Daily history: <a href={history}>{history.replace(/^https:\/\//, "")}</a>
+            </>
+          )}
         </p>
       </footer>
     </main>

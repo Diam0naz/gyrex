@@ -35,8 +35,7 @@ jobs:
       - run: pip install -e .
       - name: Collect prices
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}  # Neon, pooled
         run: gyrex-collect --dump out
       - name: Keep raw payloads for a week
         if: always()

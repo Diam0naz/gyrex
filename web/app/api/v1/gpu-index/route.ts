@@ -1,13 +1,14 @@
-import { getIndex, REVALIDATE_SECONDS } from "@/lib/data";
+import { latestSeen, REVALIDATE_SECONDS } from "@/lib/data";
+import { getIndex } from "@/lib/load";
 
 export const revalidate = 300;
 
 /** Public read-only API: GET /api/v1/gpu-index -> { source, updated_at, rows: [...] } */
 export async function GET() {
   try {
-    const { rows, updatedAt, source } = await getIndex();
+    const { rows, source } = await getIndex();
     return Response.json(
-      { source, updated_at: updatedAt, unit: "USD per GPU-hour", rows },
+      { source, updated_at: latestSeen(rows), unit: "USD per GPU-hour", rows },
       {
         headers: {
           "Access-Control-Allow-Origin": "*",
@@ -15,7 +16,8 @@ export async function GET() {
         },
       },
     );
-  } catch {
+  } catch (e) {
+    console.error(e);
     return Response.json({ error: "index temporarily unavailable" }, { status: 503 });
   }
 }

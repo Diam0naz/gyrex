@@ -1,5 +1,5 @@
 """Build web/demo/gpu_index.json: the same aggregation as the gpu_index view, computed from a
-live gpuhunt pull, so the page can run locally without Supabase. Centralized clouds only:
+live gpuhunt pull, so the page can run locally without a database. Centralized clouds only:
 no Nosana numbers are invented for the demo."""
 
 import json

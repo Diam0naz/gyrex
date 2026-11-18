@@ -1,47 +1,61 @@
 # Gyrex: GPU price index (weekend build)
 
 Collects GPU prices from centralized clouds (via [gpuhunt](https://pypi.org/project/gpuhunt/))
-and from Nosana, normalizes them into one schema, and writes them to Supabase. This is layer 1
-of the Gyrex plan, minus probe jobs.
+and from Nosana, normalizes them into one schema, and writes them to **Neon Postgres**. A Next.js
+page shows the index and updates live through **Neon Realtime**; a **Neon Function** keeps a
+daily history. This is layer 1 of the Gyrex plan, minus probe jobs.
 
 ```
-gpuhunt (9 clouds) ─┐
-                    ├─> normalize GPU names ─> ingest_offers() RPC ─> offers           (current state)
-Nosana markets API ─┘                                              ├> price_changes    (only when a price moves)
-                                                                   └> gpu_index view   (public, per-GPU stats)
+gpuhunt (9 clouds) ─┐                                    ┌> offers            (current state, active flag)
+                    ├─> normalize ─> ingest_offers() ────┼> price_changes     (only when a price moves)
+Nosana markets API ─┘    (hourly, GitHub Actions)        └> collector_runs    (monitoring)
+                                                                │
+        web/ (Vercel) <── initial rows: Neon HTTP driver ───────┤ gpu_index (per-GPU stats)
+          browser   <──── live rows: Neon Realtime (sealed live query)
+        snapshot (Neon Function, cron 00:41 UTC) ──> gpu_index_daily ──> GET / = public history JSON
 ```
 
 ## Setup
 
-1. **Supabase.** Create a project, then run `supabase/migrations/20261118000000_price_index.sql`
-   in the SQL editor (or `supabase db push` with the CLI).
+1. **Neon.** The project is linked in `web/.neon` (not committed) and declared in `web/neon.ts`.
+   ```bash
+   cd web && neon deploy           # functions, trigger, Realtime; writes web/.env.local
+   cd .. && set -a; . web/.env.local; set +a
+   python -m gyrex.migrate         # applies db/migrations/*.sql once each (uses DATABASE_URL_UNPOOLED)
+   ```
 2. **Local run.**
    ```bash
    python -m venv .venv && . .venv/bin/activate
    pip install -e '.[dev]'
    pytest -q
    gyrex-collect --dry-run --dump out     # no database; inspect out/*.json
-   cp .env.example .env                   # fill in, then:
-   set -a; . ./.env; set +a; gyrex-collect
+   gyrex-collect                          # writes to Neon (needs DATABASE_URL)
    ```
-3. **Schedule.** Push to GitHub and add repo secrets `SUPABASE_URL` and
-   `SUPABASE_SERVICE_ROLE_KEY`. `.github/workflows/collect.yml` runs hourly and keeps Nosana's
-   raw API payload as a 7-day artifact.
+3. **Schedule.** Add the repo secret `DATABASE_URL` (Neon, pooled). `.github/workflows/collect.yml`
+   runs hourly and keeps Nosana's raw API payload as a 7-day artifact.
+4. **Website.** See [`web/README.md`](web/README.md) for the Vercel settings and env vars.
 
 ## Data model
 
 | Object | What it holds |
 |---|---|
-| `offers` | One row per offer, keyed `source\|provider\|instance\|region\|spot\|gpu_count`. Prices are per instance; `price_per_gpu_hr` is generated. |
+| `offers` | One row per offer, keyed `source\|provider\|instance\|region\|spot\|gpu_count`. Prices are per instance; `price_per_gpu_hr` is generated. `active` is false once the offer's provider ran without it. |
 | `price_changes` | A row when an offer first appears or its price changes. This is the history that can't be backfilled. |
-| `collector_runs` | Status, counts, errors and **unmapped GPU names** per source per run. Private. |
-| `gpu_index` (view) | Per `gpu_model × vram_gb × offer_type`: offer count, providers, min/median/max $/GPU-hr, over offers seen in the last 6 h. |
+| `collector_runs` | Status, counts, delisted offers, errors and **unmapped GPU names** per source per run. |
+| `gpu_index` (view) | Per `gpu_model × vram_gb × offer_type`: offer count, providers, min/median/max $/GPU-hr over active offers. Same SQL as the live query in `web/lib/queries.ts`. |
+| `gpu_index_daily` | One `gpu_index` snapshot per UTC day, written by the `snapshot` function. |
 
-Access: `anon` can read `offers`, `price_changes` and `gpu_index`. Only the service role can
-write (through `ingest_offers`) or read `collector_runs`.
+The collector writes through Neon's SQL-over-HTTP endpoint (`gyrex/neon_http.py`), so it needs
+only outbound HTTPS. Writes go through `ingest_offers()` and `close_run()`; after each run,
+offers that a provider stopped listing are marked inactive. A provider that errors or returns
+nothing keeps its last known offers.
 
-Storage: a full gpuhunt run is about 13k offers, roughly 14 MB including indexes. History grows only
-with actual price moves, so the free tier's 500 MB lasts a long time. Full hourly snapshots
+No row-level security: Neon Realtime rejects live queries on RLS tables, and the database is
+only reachable with a server-side connection string. The browser never sees one: it gets a
+sealed (encrypted, 60-second) live query.
+
+Storage: a full gpuhunt run is about 12k offers, roughly 14 MB including indexes. History grows only
+with actual price moves, so Neon's free storage lasts a long time. Full hourly snapshots
 would have filled it in weeks.
 
 ## GPU name mapping

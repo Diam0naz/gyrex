@@ -1,7 +1,7 @@
 [project]
 name = "gyrex"
 version = "0.1.0"
-description = "GPU price index collector: gpuhunt + Nosana -> Supabase"
+description = "GPU price index collector: gpuhunt + Nosana -> Neon Postgres"
 requires-python = ">=3.11"
 dependencies = [
     "gpuhunt>=0.1.0",

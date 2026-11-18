@@ -77,6 +77,18 @@ h1 { margin: 0; font-size: clamp(28px, 5vw, 40px); line-height: 1.1; letter-spac
 .stats dd { margin: 2px 0 0; font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .stats dd.small { font-size: 15px; padding-top: 6px; }
 
+.live {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 16px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.live .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
+.live-live .dot { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.live-paused .dot { background: #c98a1b; }
+
 .table-block { margin-top: 28px; }
 .search input {
   width: 100%;

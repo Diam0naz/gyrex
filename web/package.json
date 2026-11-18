@@ -11,14 +11,21 @@
   "dependencies": {
     "@neon/config": "^1.14.3",
     "@neon/env": "^2.1.6",
+    "@neon/realtime": "^0.2.1",
+    "@neon/realtime-react": "^0.2.0",
+    "@neondatabase/serverless": "^1.2.1",
     "next": "16.4.5",
     "react": "19.2.0",
-    "react-dom": "19.2.0"
+    "react-dom": "19.2.0",
+    "server-only": "^0.0.1"
   },
   "devDependencies": {
+    "@neon/functions": "^0.11.0",
     "@types/node": "22.15.3",
+    "@types/pg": "^8.23.1",
     "@types/react": "19.2.2",
     "@types/react-dom": "19.2.2",
+    "pg": "^8.23.1",
     "typescript": "5.9.3"
   }
 }
