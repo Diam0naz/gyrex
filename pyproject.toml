@@ -1,0 +1,25 @@
+[project]
+name = "gyrex"
+version = "0.1.0"
+description = "GPU price index collector: gpuhunt + Nosana -> Supabase"
+requires-python = ">=3.11"
+dependencies = [
+    "gpuhunt>=0.1.0",
+    "requests>=2.31",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+gyrex-collect = "gyrex.collect:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["gyrex*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

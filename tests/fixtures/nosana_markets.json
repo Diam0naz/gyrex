@@ -1,0 +1,15 @@
+{
+ "markets": [
+  {"address": "97G9NnvBDQ2WpKu6fasoMsAKmfj63C9rhysJnkeWodAf", "slug": "nvidia-4090", "name": "NVIDIA 4090", "type": "PREMIUM", "usd_reward_per_hour": 0.4, "nos_reward_per_second": 0.00025},
+  {"address": "7AtiXMSH6R1jjBxrcYjehCkkSF7zvYWte63gwEDBcGHq", "slug": "nvidia-3060", "name": "NVIDIA 3060", "type": "COMMUNITY", "nos_reward_per_second": 0.00004},
+  {"address": "CA5pMpqkYFKtme7K31pNB1s62X2SdhEv1nN9RdxKCpuQ", "slug": "nvidia-a100-80gb", "name": "NVIDIA A100 80GB", "type": "PREMIUM", "usd_reward_per_hour": 1.1},
+  {"address": "62bAk2ppEL2HpotfPZsscSq4CGEfY6VEqD5dQQuTo7JC", "slug": "nvidia-rtx-a6000", "name": "NVIDIA RTX A6000", "type": "PREMIUM", "usd_reward_per_hour": 0.5},
+  {"address": "Fake1111111111111111111111111111111111111111", "slug": "mystery", "name": "Mystery Accelerator X", "type": "COMMUNITY", "usd_reward_per_hour": 0.2},
+  {"address": "NoPrice111111111111111111111111111111111111", "slug": "nvidia-h100", "name": "NVIDIA H100", "type": "PREMIUM"}
+ ],
+ "nos_usd": 0.5,
+ "reservations_gpus": {"gpus": [
+  {"name": "NVIDIA GeForce RTX 4090", "vramGb": 24, "nodes": 120, "available": 37, "working": 80,
+   "markets": ["97G9NnvBDQ2WpKu6fasoMsAKmfj63C9rhysJnkeWodAf"], "price": {"minUsdPerHour": 0.4, "maxUsdPerHour": 0.4}}
+ ]}
+}
