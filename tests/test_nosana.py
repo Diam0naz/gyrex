@@ -85,6 +85,24 @@ def test_reported_vram_snaps_to_the_marketed_size():
     assert (o.gpu_model, o.vram_gb) == ("RTXPRO6000", 96.0)
 
 
+def test_price_includes_the_market_network_fee():
+    o = nosana.market_to_offer({**_market("NVIDIA 4090", price=0.3636), "network_fee_percentage": 10}, None, {})
+    assert o.price_usd_hr == 0.39996
+    assert (o.extra["host_usd_hr"], o.extra["network_fee_applied"]) == (0.3636, 0.1)
+
+
+def test_fee_applies_to_the_nos_price_fallback():
+    market = {**_market("NVIDIA 4090", price=None), "nos_reward_per_second": 0.0001, "network_fee_percentage": 10}
+    assert nosana.market_to_offer(market, 0.5, {}).price_usd_hr == 0.198
+
+
+def test_missing_or_implausible_fee_is_not_applied():
+    for fee in (None, "n/a", -5, 0, 1000):
+        market = {**_market("NVIDIA 4090", price=1.0), "network_fee_percentage": fee}
+        o = nosana.market_to_offer(market, None, {})
+        assert (o.price_usd_hr, o.extra["network_fee_applied"]) == (1.0, 0.0)
+
+
 def test_fetch_handles_api_down(monkeypatch):
     monkeypatch.setenv("NOSANA_API_URL", "http://127.0.0.1:9")  # nothing listens here
     offers, errors = nosana.fetch()

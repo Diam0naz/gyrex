@@ -11,8 +11,9 @@ The SDK types GET /markets/ as Record<string, unknown>, so the field names used 
 SDK's market update schema. Run `gyrex-collect --dry-run --dump out/` once against the live
 API and check out/nosana_raw.json before trusting the numbers.
 
-Price note: usd_reward_per_hour is what the HOST earns. If Nosana adds a network fee on top
-for the buyer, the buyer price is higher; record it in NETWORK_FEE once confirmed.
+Price note: usd_reward_per_hour is what the HOST earns. Buyers pay that plus the market's
+network_fee_percentage (nos_job_price_per_second = nos_reward_per_second * (1 + fee)), and the
+index reports the buyer price.
 """
 
 from __future__ import annotations
@@ -29,7 +30,6 @@ from gyrex.normalize import canonical_gpu, default_vram, gpu_count_from_name, sn
 log = logging.getLogger(__name__)
 
 DEFAULT_API = "https://host-manager.k8s.prd.nosana.com"
-NETWORK_FEE = 0.0  # fraction added to the host rate to get the buyer rate; unverified, so 0
 TIMEOUT = 20
 
 
@@ -49,6 +49,12 @@ def _num(v: Any) -> float | None:
     except (TypeError, ValueError):
         return None
     return f if f > 0 else None
+
+
+def _network_fee(m: dict[str, Any]) -> float:
+    """The market's fee as a fraction. Missing or implausible values count as no fee."""
+    percent = _num(m.get("network_fee_percentage")) or 0.0
+    return percent / 100 if percent <= 100 else 0.0
 
 
 def _match_gpu(name: str, entries: list[dict[str, Any]]) -> tuple[str | None, dict[str, Any]]:
@@ -82,7 +88,9 @@ def market_to_offer(
             price_basis = "nos_reward_per_second*nos_usd"
     if price is None:
         return None
-    price *= 1 + NETWORK_FEE
+    host_price = price
+    network_fee = _network_fee(m)
+    price = host_price * (1 + network_fee)
 
     entries = gpu_info.get(market_id) or gpu_info.get(str(m.get("slug") or "")) or []
     model, info = _match_gpu(name, entries)
@@ -105,7 +113,8 @@ def market_to_offer(
             "market_type": market_type,  # PREMIUM | COMMUNITY
             "slug": m.get("slug"),
             "price_basis": price_basis,
-            "network_fee_applied": NETWORK_FEE,
+            "network_fee_applied": network_fee,
+            "host_usd_hr": round(host_price, 6),
             "nodes": info.get("nodes"),
             "working": info.get("working"),
             "market_gpus": [e.get("name") for e in entries],

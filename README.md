@@ -88,8 +88,8 @@ been run against the live API**. The build sandbox couldn't reach Nosana's hosts
 - `GET https://host-manager.k8s.prd.nosana.com/markets/` is untyped in the SDK. Field names
   (`address`, `slug`, `name`, `type`, `usd_reward_per_hour`, `nos_reward_per_second`) come from
   the SDK's market update schema. After the first run, open `out/nosana_raw.json` and confirm them.
-- `usd_reward_per_hour` is what the **host** earns. If buyers pay a network fee on top, set
-  `NETWORK_FEE` in `gyrex/adapters/nosana.py`.
+- `usd_reward_per_hour` is what the **host** earns. The index adds each market's
+  `network_fee_percentage` to show the buyer price, and keeps the host rate in `extra.host_usd_hr`.
 - `/reservations/gpus` (VRAM, node and availability counts) is optional enrichment. If it needs
   auth or changes shape, prices still come through and the run is marked `partial`.
 
