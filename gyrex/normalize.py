@@ -30,23 +30,32 @@ ALIASES: dict[str, str] = {
     "A10G": "A10G",
     "H100NVL": "H100NVL",
     "H200NVL": "H200NVL",
+    "4000A4000": "A4000",  # Nosana: "NVIDIA 4000/A4000"
+    "5000A5000": "A5000",  # Nosana: "NVIDIA 5000/A5000"
 }
 
-# Tokens that carry no model identity: brand words, form factors, memory sizes.
-# VRAM is captured separately (vram_from_name / the provider's own field).
+# Tokens that carry no model identity: brand words, form factors, memory sizes, market labels
+# (Nosana's "Community", "SEV TEE", "(SOC2)", "(CC)", "(WE)") and multipliers ("(6x)").
+# VRAM and GPU count are captured separately.
 _NOISE_TOKEN = re.compile(
     r"^(NVIDIA|GEFORCE|TESLA|GENERATION|BLACKWELL|LAPTOP|GPU|EDITION|NVLINK"
-    r"|PCIE\d*|SXM\d*|HBM\d*E?|GDDR\d+X?|\d+GB)$"
+    r"|COMMUNITY|SERVER|WORKSTATION|SEV|TEE|SOC2|CC|WE"
+    r"|PCIE\d*|SXM\d*|HBM\d*E?|GDDR\d+X?|\d+GB|\d+X)$"
 )
 # Same form factors when glued on without a separator ("H100SXM5"). No memory sizes here:
 # "\d+GB$" on "H10080GB" would eat the model number.
 _GLUED_SUFFIX = re.compile(r"(PCIE\d*|SXM\d*|HBM\d*E?|NVLINK)$")
 _VRAM = re.compile(r"(\d{2,3})\s*GB", re.IGNORECASE)
+_MULTIPLIER = re.compile(r"(?<![A-Za-z0-9])(\d+)\s*x(?![A-Za-z0-9])", re.IGNORECASE)
+# Providers report usable memory, which can sit just under the marketed size (95 for 96 GB).
+_VRAM_TOLERANCE_GB = 2.0
 
 
 def _squash(raw: str) -> str:
-    tokens = re.split(r"[^A-Z0-9]+", raw.upper())
-    return "".join(t for t in tokens if t and not _NOISE_TOKEN.match(t))
+    tokens = [t for t in re.split(r"[^A-Z0-9]+", raw.upper()) if t]
+    if "NVIDIA" in tokens:  # anything earlier is a pool name: "ember-drift NVIDIA 4090"
+        tokens = tokens[tokens.index("NVIDIA") :]
+    return "".join(t for t in tokens if not _NOISE_TOKEN.match(t))
 
 
 def canonical_gpu(raw: str | None) -> str | None:
@@ -75,8 +84,23 @@ def vram_from_name(raw: str | None) -> float | None:
     return float(m.group(1)) if m else None
 
 
+def gpu_count_from_name(raw: str | None) -> int:
+    """'NVIDIA Pro 6000 (6x)' -> 6. Names without a multiplier mean one GPU."""
+    m = _MULTIPLIER.search(raw or "")
+    return int(m.group(1)) if m and int(m.group(1)) > 0 else 1
+
+
 def default_vram(model: str | None) -> float | None:
     """VRAM from gpuhunt's known-GPU table, or None when the model ships in several sizes
     (A100 40/80, RTX 3060 8/12): guessing there would put offers in the wrong index bucket."""
     sizes = {float(g.memory) for g in gpuhunt.KNOWN_NVIDIA_GPUS if g.name == model}
     return sizes.pop() if len(sizes) == 1 else None
+
+
+def snap_vram(reported: float | None, model: str | None) -> float | None:
+    """Use the marketed size when a reported value is only just off it, so 95 and 96 GB cards
+    share one index bucket. Values further away are kept: they may be a real variant."""
+    known = default_vram(model)
+    if reported and known and abs(reported - known) <= _VRAM_TOLERANCE_GB:
+        return known
+    return reported

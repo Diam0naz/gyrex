@@ -24,7 +24,7 @@ from typing import Any
 import requests
 
 from gyrex.models import Offer
-from gyrex.normalize import canonical_gpu, default_vram, vram_from_name
+from gyrex.normalize import canonical_gpu, default_vram, gpu_count_from_name, snap_vram, vram_from_name
 
 log = logging.getLogger(__name__)
 
@@ -51,8 +51,22 @@ def _num(v: Any) -> float | None:
     return f if f > 0 else None
 
 
+def _match_gpu(name: str, entries: list[dict[str, Any]]) -> tuple[str | None, dict[str, Any]]:
+    """Pick the market's GPU model and the /reservations/gpus entry describing it.
+
+    A market can hold several variants ("NVIDIA 4070" has the 4070, 4070 Ti and 4070 SUPER), so
+    the market's own name decides the model. Entries only name it when the market name can't.
+    """
+    model = canonical_gpu(name)
+    if model is None:
+        if len(entries) == 1:
+            return canonical_gpu(entries[0].get("name")), entries[0]
+        return None, {}
+    return model, next((e for e in entries if canonical_gpu(e.get("name")) == model), {})
+
+
 def market_to_offer(
-    m: dict[str, Any], nos_usd: float | None, gpu_info: dict[str, dict[str, Any]]
+    m: dict[str, Any], nos_usd: float | None, gpu_info: dict[str, list[dict[str, Any]]]
 ) -> Offer | None:
     market_id = str(m.get("address") or m.get("slug") or m.get("id") or "")
     name = str(m.get("name") or m.get("slug") or "")
@@ -70,9 +84,9 @@ def market_to_offer(
         return None
     price *= 1 + NETWORK_FEE
 
-    info = gpu_info.get(market_id) or gpu_info.get(str(m.get("slug") or "")) or {}
-    model = canonical_gpu(info.get("name") or name)
-    vram = _num(info.get("vramGb")) or vram_from_name(name) or default_vram(model)
+    entries = gpu_info.get(market_id) or gpu_info.get(str(m.get("slug") or "")) or []
+    model, info = _match_gpu(name, entries)
+    vram = snap_vram(_num(info.get("vramGb")), model) or vram_from_name(name) or default_vram(model)
     market_type = str(m.get("type") or "").upper() or None
 
     return Offer(
@@ -83,7 +97,7 @@ def market_to_offer(
         region="global",
         gpu_raw=name,
         gpu_model=model,
-        gpu_count=1,
+        gpu_count=gpu_count_from_name(name),
         vram_gb=vram,
         price_usd_hr=round(price, 6),
         available=info.get("available"),
@@ -94,16 +108,17 @@ def market_to_offer(
             "network_fee_applied": NETWORK_FEE,
             "nodes": info.get("nodes"),
             "working": info.get("working"),
+            "market_gpus": [e.get("name") for e in entries],
         },
     )
 
 
-def _gpu_info_by_market(payload: Any) -> dict[str, dict[str, Any]]:
+def _gpu_info_by_market(payload: Any) -> dict[str, list[dict[str, Any]]]:
     """Index /reservations/gpus entries by each market id they list."""
-    out: dict[str, dict[str, Any]] = {}
+    out: dict[str, list[dict[str, Any]]] = {}
     for g in (payload or {}).get("gpus", []) if isinstance(payload, dict) else []:
         for mid in g.get("markets") or []:
-            out[str(mid)] = g
+            out.setdefault(str(mid), []).append(g)
     return out
 
 

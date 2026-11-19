@@ -76,6 +76,10 @@ are still stored with `gpu_model = null` and listed in `collector_runs.unmapped_
 to `ALIASES` when they show up. VRAM is only filled from the known-GPU table when the model has
 a single size: A100 (40/80) and RTX 3060 (8/12) are left empty rather than guessed.
 
+A Nosana market can hold several variants, so its own name decides the model: "NVIDIA 4070" is
+indexed as the RTX 4070 even though it also contains Ti and SUPER cards. "(6x)" sets `gpu_count`,
+so the index shows the price per GPU. `(Reserved)` names no GPU and stays unmapped on purpose.
+
 ## Verify before trusting Nosana numbers
 
 The Nosana adapter was written against the official SDK (`@nosana/api` 2.24.5) but **has not
