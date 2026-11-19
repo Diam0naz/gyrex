@@ -5,7 +5,11 @@ export default defineConfig({
   // add the production domain once Vercel assigns it.
   preview: {
     realtime: {
-      allowedOrigins: ["http://localhost:3000", "http://localhost:3100"],
+      allowedOrigins: [
+        "http://localhost:3000",
+        "http://localhost:3100",
+        "https://gyrex-joshua-utenohs-projects.vercel.app",
+      ],
     },
   },
   auth: false,
