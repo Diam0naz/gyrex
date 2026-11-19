@@ -2,7 +2,9 @@ name: collect
 
 on:
   schedule:
-    - cron: "23 * * * *"   # hourly, off the top of the hour
+    # Fallback only. The hourly schedule is the `dispatch` Neon Function (web/neon.ts), because
+    # GitHub skips scheduled runs under load. It skips a run when this one started recently.
+    - cron: "53 */3 * * *"
   workflow_dispatch: {}
 
 concurrency:

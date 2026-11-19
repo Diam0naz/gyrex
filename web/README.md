@@ -7,7 +7,7 @@ gpuhunt pull) behind a "Sample data" banner.
 |---|---|---|
 | Postgres | `lib/db.ts`, `lib/load.ts` | Reads the index with the HTTP driver (`@neondatabase/serverless`): one-shot SELECTs from an ISR render (5 min) and the API route. |
 | Realtime | `lib/realtime.ts`, `app/LiveIndex.tsx`, `app/api/realtime/gpu-index` | The server seals the index query (`lib/queries.ts`); the browser subscribes with `useLiveQuery` and the table updates as each collector run commits. `POST /api/realtime/gpu-index` renews the sealed query (it expires after ~60 s). |
-| Functions | `functions/snapshot.ts`, `neon.ts` | `snapshot`: a daily cron trigger (00:41 UTC) stores the index into `gpu_index_daily`; `GET /?days=30` serves that history as public JSON. Uses `pg` with a module-scope pool, as Neon recommends for long-running Functions. |
+| Functions | `functions/snapshot.ts`, `neon.ts` | `snapshot`: a daily cron trigger (00:41 UTC) stores the index into `gpu_index_daily`; `GET /?days=30` serves that history as public JSON. Uses `pg` with a module-scope pool, as Neon recommends for long-running Functions. `dispatch`: an hourly cron trigger (:23) that starts the collector workflow on GitHub, skipping when a run is active or started in the last 20 minutes. |
 
 ```bash
 npm install

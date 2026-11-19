@@ -34,7 +34,11 @@ Nosana markets API ─┘    (hourly, GitHub Actions)        └> collector_runs
    gyrex-collect                          # writes to Neon (needs DATABASE_URL)
    ```
 3. **Schedule.** Add the repo secret `DATABASE_URL` (Neon, pooled). `.github/workflows/collect.yml`
-   runs hourly and keeps Nosana's raw API payload as a 7-day artifact.
+   runs the collector and keeps Nosana's raw API payload as a 7-day artifact. The `dispatch` Neon
+   Function starts it hourly at :23, because GitHub's own cron skips runs under load; that cron
+   remains as a 3-hourly fallback. The function needs `GITHUB_DISPATCH_TOKEN` in `web/.env.local`:
+   a fine-grained token for this repository only, with Actions read and write. When it expires,
+   only the fallback runs, so renew it before then.
 4. **Website.** See [`web/README.md`](web/README.md) for the Vercel settings and env vars.
 
 ## Data model
