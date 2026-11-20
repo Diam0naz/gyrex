@@ -1,3 +1,5 @@
+<img src="web/public/gyrex-mark.svg" alt="Gyrex" width="64" height="64">
+
 # Gyrex: GPU price index (weekend build)
 
 Collects GPU prices from centralized clouds (via [gpuhunt](https://pypi.org/project/gpuhunt/))

@@ -43,6 +43,9 @@ code { font-family: var(--mono); font-size: 0.9em; }
 .wrap { max-width: 960px; margin: 0 auto; padding: 48px 16px 64px; }
 
 .eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin: 0 0 4px;
   color: var(--accent);
   font-weight: 600;

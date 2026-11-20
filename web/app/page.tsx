@@ -23,7 +23,10 @@ export default async function Page() {
     return (
       <main className="wrap">
         <header className="head">
-          <p className="eyebrow">Gyrex</p>
+          <p className="eyebrow">
+            <img src="/gyrex-mark.svg" alt="" width={20} height={20} />
+            Gyrex
+          </p>
           <h1>GPU price index</h1>
         </header>
         <p className="notice" role="alert">
@@ -41,7 +44,10 @@ export default async function Page() {
   return (
     <main className="wrap">
       <header className="head">
-        <p className="eyebrow">Gyrex</p>
+        <p className="eyebrow">
+          <img src="/gyrex-mark.svg" alt="" width={20} height={20} />
+          Gyrex
+        </p>
         <h1>GPU price index</h1>
         <p className="lede">
           What it costs to rent one GPU for one hour, across centralized clouds
