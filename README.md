@@ -99,6 +99,27 @@ been run against the live API**. The build sandbox couldn't reach Nosana's hosts
 - `/reservations/gpus` (VRAM, node and availability counts) is optional enrichment. If it needs
   auth or changes shape, prices still come through and the run is marked `partial`.
 
+## Probe jobs (Nosana)
+
+`gyrex-probe` posts a short benchmark ([`probe/gemm.py`](probe/gemm.py): 20 s of FP16 8192² matmuls,
+then a 1 GiB device-to-device copy) to the Premium and Community RTX 4090 markets, which list the
+same price. Each attempt becomes one `probe_runs` row with stage timings (`queue_s`: submitted to
+picked up; `startup_s`: picked up to first CUDA kernel, which includes the image pull), TFLOPS
+(median, p10, first vs last fifth of the window, to catch throttling), copy bandwidth, the node
+and the GPU's UUID and driver. Jobs that never start are stored too (`queue_timeout`).
+
+```bash
+set -a; . ./.env.local; set +a       # NOSANA_API_KEY, DATABASE_URL
+gyrex-probe --check                  # free: validates the job with Nosana, shows cost and budget
+gyrex-probe                          # one probe per market, in parallel
+```
+
+Spending is capped. Each probe is a one-replica deployment with a 10-minute timeout, so it costs at
+most $0.067 at $0.40/hr. Before submitting, the last 7 days' probes (worst case until their cost
+is known) plus the new ones must fit in `PROBE_WEEKLY_CAP_USD` (default $5) and in the account's
+Nosana credits. Deployments are always stopped and archived afterwards. The image is the public
+`pytorch/pytorch:2.4.1-cuda12.1-cudnn9-runtime` (3.2 GB), so nothing needs publishing.
+
 ## Notes
 
 - `gpuhunt.query()` across all providers raises if any online provider fails. The adapter

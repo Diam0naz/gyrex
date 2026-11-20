@@ -13,6 +13,7 @@ dev = ["pytest>=8"]
 
 [project.scripts]
 gyrex-collect = "gyrex.collect:main"
+gyrex-probe = "gyrex.probe:main"
 
 [build-system]
 requires = ["setuptools>=68"]
